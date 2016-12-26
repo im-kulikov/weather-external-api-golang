@@ -13,3 +13,7 @@ Go to [WUnderground.com](https://www.wunderground.com/weather/api)
 ## How to use:
 
 `go run *.go -wunderground.api.key=<wunderground-api-key> -openweather.api.key=<openweather-api-key>`
+
+## License
+
+[MIT License](License.md)
