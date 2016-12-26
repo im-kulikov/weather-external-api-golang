@@ -1,21 +1,16 @@
 package main
 
-import "net/http"
-import "log"
-import "encoding/json"
-import "strings"
-import "time"
-import "flag"
-
-type weatherData struct {
-    Name string `json:"name"`
-    Main struct {
-        Kelvin float64 `json:"temp"`
-    } `json:"main"`
-}
+import (
+  "net/http"
+  "log"
+  "encoding/json"
+  "strings"
+  "time"
+  "flag"
+)
 
 type weatherProvider interface {
-    temperature(city string) (float64, error) // in Kelvin, naturally
+  temperature(city string) (float64, error) // in Kelvin, naturally
 }
 
 type openWeatherMap struct{
@@ -46,7 +41,7 @@ func (w openWeatherMap) temperature(city string) (float64, error) {
 }
 
 type weatherUnderground struct {
-    apiKey string
+  apiKey string
 }
 
 func (w weatherUnderground) temperature(city string) (float64, error) {
@@ -74,55 +69,55 @@ func (w weatherUnderground) temperature(city string) (float64, error) {
 }
 
 func temperature(city string, providers ...weatherProvider) (float64, error) {
-    sum := 0.0
+  sum := 0.0
 
-    for _, provider := range providers {
-        k, err := provider.temperature(city)
-        if err != nil {
-            return 0, err
-        }
-
-        sum += k
+  for _, provider := range providers {
+    k, err := provider.temperature(city)
+    if err != nil {
+      return 0, err
     }
 
-    return sum / float64(len(providers)), nil
+    sum += k
+  }
+
+  return sum / float64(len(providers)), nil
 }
 
 type multiWeatherProvider []weatherProvider
 
 func (w multiWeatherProvider) temperature(city string) (float64, error) {
-    // Make a channel for temperatures, and a channel for errors.
-    // Each provider will push a value into only one.
-    temps := make(chan float64, len(w))
-    errs := make(chan error, len(w))
+  // Make a channel for temperatures, and a channel for errors.
+  // Each provider will push a value into only one.
+  temps := make(chan float64, len(w))
+  errs := make(chan error, len(w))
 
-    // For each provider, spawn a goroutine with an anonymous function.
-    // That function will invoke the temperature method, and forward the response.
-    for _, provider := range w {
-        go func(p weatherProvider) {
-            k, err := p.temperature(city)
-            if err != nil {
-                errs <- err
-                return
-            }
-            temps <- k
-        }(provider)
+  // For each provider, spawn a goroutine with an anonymous function.
+  // That function will invoke the temperature method, and forward the response.
+  for _, provider := range w {
+    go func(p weatherProvider) {
+      k, err := p.temperature(city)
+      if err != nil {
+        errs <- err
+        return
+      }
+      temps <- k
+    }(provider)
+  }
+
+  sum := 0.0
+
+  // Collect a temperature or an error from each provider.
+  for i := 0; i < len(w); i++ {
+    select {
+    case temp := <-temps:
+      sum += temp
+    case err := <-errs:
+      return 0, err
     }
+  }
 
-    sum := 0.0
-
-    // Collect a temperature or an error from each provider.
-    for i := 0; i < len(w); i++ {
-        select {
-        case temp := <-temps:
-            sum += temp
-        case err := <-errs:
-            return 0, err
-        }
-    }
-
-    // Return the average, same as before.
-    return sum / float64(len(w)), nil
+  // Return the average, same as before.
+  return sum / float64(len(w)), nil
 }
 
 func main() {
